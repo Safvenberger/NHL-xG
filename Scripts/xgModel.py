@@ -13,7 +13,9 @@ from pandera.typing import DataFrame
 from preprocessShots import get_shots, create_dummy_vars
 from xgboostParams import ev_params, pp_params, sh_params, en_params
 from parameterTuning import optimize_model, space
-from evaluateModel import compute_xg
+from evaluateModel import compute_xg, plot_feature_importance
+from matplotlib import font_manager
+from matplotlib import rcParams
 
 
 def split_data(shot_data: DataFrame) -> Tuple[DataFrame, DataFrame, DataFrame, 
@@ -166,6 +168,19 @@ def fit_model(shot_data: DataFrame, space: Dict, best_params: Dict=None,
 
 
 if __name__ == "__main__":
+    # If the models should be trained or not
+    train = False    
+    
+    # Find all fonts
+    font_files = font_manager.findSystemFonts(fontpaths="../Fonts")
+       
+    # Add all fonts
+    for font_file in font_files:
+       font_manager.fontManager.addfont(font_file)
+       
+    # Set Roboto as default font
+    rcParams["font.family"] = "Roboto"
+    
     # Get play by play events and all (fenwick) shots
     pbp, shots = get_shots(end_season=2022)
     
@@ -185,21 +200,39 @@ if __name__ == "__main__":
     # All shots toward an empty net
     en_shots = shots.loc[shots.EmptyNet.astype(bool)].copy()
     
-    # Train the models
-    ev_xg, ev_xg_mod, ev_params = fit_model(ev_shots, space=space, 
-                                            best_params=None, optimize=True, max_evals=250)
-    pp_xg, pp_xg_mod, pp_params = fit_model(pp_shots, space=space, 
-                                            best_params=None, optimize=True, max_evals=500)
-    sh_xg, sh_xg_mod, sh_params = fit_model(sh_shots, space=space, 
-                                            best_params=None, optimize=True, max_evals=1000)
-    en_xg, en_xg_mod, en_params = fit_model(en_shots, space=space, 
-                                            best_params=None, optimize=True, max_evals=1000)
+    if train:
+        # Train the models
+        ev_xg, ev_xg_mod, ev_params = fit_model(ev_shots, space=space, 
+                                                best_params=None, optimize=True, max_evals=250)
+        pp_xg, pp_xg_mod, pp_params = fit_model(pp_shots, space=space, 
+                                                best_params=None, optimize=True, max_evals=500)
+        sh_xg, sh_xg_mod, sh_params = fit_model(sh_shots, space=space, 
+                                                best_params=None, optimize=True, max_evals=1000)
+        en_xg, en_xg_mod, en_params = fit_model(en_shots, space=space, 
+                                                best_params=None, optimize=True, max_evals=1000)
+                
+        # Save the models
+        pickle.dump(ev_xg_mod, open("../Models/ev_xg_mod", "wb"))
+        pickle.dump(pp_xg_mod, open("../Models/pp_xg_mod", "wb"))
+        pickle.dump(sh_xg_mod, open("../Models/sh_xg_mod", "wb"))
+        pickle.dump(en_xg_mod, open("../Models/en_xg_mod", "wb"))
     
-    # Save the models
-    pickle.dump(ev_xg_mod, open("../Models/ev_xg_mod", "wb"))
-    pickle.dump(pp_xg_mod, open("../Models/pp_xg_mod", "wb"))
-    pickle.dump(sh_xg_mod, open("../Models/sh_xg_mod", "wb"))
-    pickle.dump(en_xg_mod, open("../Models/en_xg_mod", "wb"))
+    else:
+        # Train the optimal models
+        ev_xg, ev_xg_mod, ev_params = fit_model(ev_shots, space=space, 
+                                                best_params=ev_params, optimize=False)
+        pp_xg, pp_xg_mod, pp_params = fit_model(pp_shots, space=space, 
+                                                best_params=pp_params, optimize=False)
+        sh_xg, sh_xg_mod, sh_params = fit_model(sh_shots, space=space, 
+                                                best_params=sh_params, optimize=False)
+        en_xg, en_xg_mod, en_params = fit_model(en_shots, space=space, 
+                                                best_params=en_params, optimize=False)
     
     # Compute xG for all manpowers
     xg_name = compute_xg(pbp, ev_xg, pp_xg, sh_xg, en_xg)
+
+    # Visualize feature importance
+    for model, shot_data, suffix in zip([ev_xg_mod, pp_xg_mod, sh_xg_mod, en_xg_mod],
+                                        [ev_shots, pp_shots, sh_shots, en_shots],
+                                        ["EV", "PP", "SH", "EN"]):
+        plot_feature_importance(model, shot_data, suffix, split_data)

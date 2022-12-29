@@ -419,7 +419,9 @@ def create_dummy_vars(shots: DataFrame) -> List:
             {0: "Opp", 1: "Team"}).apply(lambda x: "".join(x.astype(str)), axis=1))
     
     # Create dummy variables for zone
-    zone_cat = pd.get_dummies(shots.Zone)
+    zone_cat = pd.get_dummies(shots.Zone.replace({"Off": "OffZone", 
+                                                  "Neu": "NeuZone", 
+                                                  "Def": "DefZone"}))
     
     # Save all variables in a list
     dummy_vars_list = [manpower_cat, shot_type_cat, score_differential_cat, 
