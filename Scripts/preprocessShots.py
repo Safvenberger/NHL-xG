@@ -32,7 +32,7 @@ def read_data(end_season: int=2022, fenwick_events: List=fenwick_events) -> Tupl
     """
 
     # Read all data from all seasons
-    pbp = pd.concat([pd.read_csv(f"../Data/GamePBPMerged/pbp_merged_{season}.csv", low_memory=False)
+    pbp = pd.concat([pd.read_csv(f"../Data/PBP/pbp_{season}.csv", low_memory=False)
                      for season in range(2010, end_season)])
     
     # Read player data to get player shooting information
@@ -41,7 +41,7 @@ def read_data(end_season: int=2022, fenwick_events: List=fenwick_events) -> Tupl
     # Find the player who shot the puck
     pbp["ShooterId"] = np.select([pbp.EventType.eq("BLOCKED SHOT"), 
                                   pbp.EventType.isin(fenwick_events)],
-                                 [pbp.Player2, pbp.Player1], 
+                                 [pbp.PlayerId2, pbp.PlayerId1], 
                                  default=np.nan)
     
     # Add information regarding player position and shooting style
@@ -51,6 +51,9 @@ def read_data(end_season: int=2022, fenwick_events: List=fenwick_events) -> Tupl
     
     # Remove any events without location data
     pbp = pbp.loc[pbp.X.notna() & pbp.Y.notna()].copy()
+
+    # Change column names
+    pbp = pbp.drop(["X", "Y"], axis=1).rename(columns={"X_adj": "X", "Y_adj": "Y"})
 
     return pbp
 
@@ -133,12 +136,12 @@ def add_extra_cols(pbp: DataFrame, fenwick_events: List=fenwick_events) -> DataF
     # If the team is the home team
     pbp_modified["IsHome"] = (pbp_modified["Team"] == pbp_modified["HomeTeamName"]).astype(int)
     
-    # Adjust goals for/against of of goal events to avoid data leakage
-    pbp_modified.loc[pbp_modified.EventType.eq("GOAL") &
-                  pbp_modified.IsHome.astype(bool), "GoalsFor"] -= 1
+    # # Adjust goals for/against of of goal events to avoid data leakage
+    # pbp_modified.loc[pbp_modified.EventType.eq("GOAL") &
+    #                  pbp_modified.IsHome.astype(bool), "GoalsFor"] -= 1
     
-    pbp_modified.loc[pbp_modified.EventType.eq("GOAL") &
-                  ~pbp_modified.IsHome.astype(bool), "GoalsAgainst"] -= 1
+    # pbp_modified.loc[pbp_modified.EventType.eq("GOAL") &
+    #                  ~pbp_modified.IsHome.astype(bool), "GoalsAgainst"] -= 1
     
     # Get the distance from the pbp data
     pbp_modified["pbpDistance"] = pbp_modified.Description.str.extract("(\d+)(?= ft.)").astype(float)
@@ -196,15 +199,15 @@ def add_players_on_ice(pbp: DataFrame) -> DataFrame:
     # Compute the number of skaters on the ice for the home team
     pbp_modified["HomeSkatersOnIce"] = np.select(
         [pbp_modified.HomeGoalieOnIce, ~pbp_modified.HomeGoalieOnIce], 
-        [pbp_modified[[f"HomePlayer{i}" for i in range(1, 7)]].notna().sum(axis=1) - 1,
-         pbp_modified[[f"HomePlayer{i}" for i in range(1, 7)]].notna().sum(axis=1)],
+        [pbp_modified[[f"HomePlayerId{i}" for i in range(1, 7)]].notna().sum(axis=1) - 1,
+         pbp_modified[[f"HomePlayerId{i}" for i in range(1, 7)]].notna().sum(axis=1)],
         default=np.nan)
     
     # Compute the number of skaters on the ice for the away team
     pbp_modified["AwaySkatersOnIce"] = np.select(
         [pbp_modified.AwayGoalieOnIce, ~pbp_modified.AwayGoalieOnIce], 
-        [pbp_modified[[f"AwayPlayer{i}" for i in range(1, 7)]].notna().sum(axis=1) - 1,
-         pbp_modified[[f"AwayPlayer{i}" for i in range(1, 7)]].notna().sum(axis=1)],
+        [pbp_modified[[f"AwayPlayerId{i}" for i in range(1, 7)]].notna().sum(axis=1) - 1,
+         pbp_modified[[f"AwayPlayerId{i}" for i in range(1, 7)]].notna().sum(axis=1)],
         default=np.nan)
 
     # Determine if the net was empty from the shooting team's perspective
